@@ -22,15 +22,76 @@ jobs:
     uses: ./.github/workflows/tfsec-check.yml
   checkov:
     uses: ./.github/workflows/checkov-check.yml
-  deploy-infra:
-    uses: ./.github/workflows/terraform-destroy.yml
-    needs: 
-      - tflint
-      - tfsec
-      - checkov
-    with:
-      workflow_init_by_name: ${{ github.event.inputs.workflow_init_by_name }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }} 
+  terraform-destroy:
+    name: Terraform Destroy Infrastructure
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.tf_working_dir }}
+    steps:      
+        - name: Checkout the repository
+          uses: actions/checkout@v3
+            
+        - name: Who is running the terraform destroy 
+          run: echo "Terraform Destroy initated by `:`   ${{ github.event.inputs.workflow_init_by_name }}"
+
+        - name: Setup Terraform with specified version on the runner
+          uses: hashicorp/setup-terraform@v3
+          with:
+            terraform_version: 1.5.3
+
+        - name: Terraform Init
+          id: init
+          run: terraform init
+
+        - name: Terraform Plan to Destroy
+          id: destroy-plan
+          run: |
+                export exitcode=0
+                terraform plan -destroy -detailed-exitcode -no-color -out destroy-${{ github.sha }}.tfplan  || export exitcode=$?
+                echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+                if [ $exitcode -eq 1 ]; then
+                  echo Terraform Plan Failed!
+                  exit 1
+                else 
+                  exit 0
+                fi
+        # Create string output of Terraform Destroy Plan
+        - name: Create String Output
+          id: plan-string
+          run: |
+            TERRAFORM_PLAN=$(terraform show -no-color destroy-${{ github.sha }}.tfplan)                    
+            delimiter="$(openssl rand -hex 8)"
+            echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+            echo "## Terraform Destroy Plan Output" >> $GITHUB_OUTPUT
+            echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo '```terraform' >> $GITHUB_OUTPUT
+            echo "$TERRAFORM_PLAN" >> $GITHUB_OUTPUT
+            echo '```' >> $GITHUB_OUTPUT
+            echo "</details>" >> $GITHUB_OUTPUT
+            echo "${delimiter}" >> $GITHUB_OUTPUT
+            
+        # Publish Terraform Destroy Plan as task summary
+        - name: Publish Terraform Destroy Plan to Task Summary
+          env:
+            SUMMARY: ${{ steps.plan-string.outputs.summary }}
+          run: |
+            echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+            
+        ## Approval needed
+        - name: Wait for approval
+          uses: trstringer/manual-approval@v1
+          with:
+            secret: ${{ secrets.GITHUB_TOKEN }}
+            approvers: prabhu-jumisa
+            minimum-approvals: 1
+            issue-title: "Terraform Destroy Infrastructure"
+            issue-body: "Please approve or deny this deployment "
+            exclude-workflow-initiator-as-approver: false
+            additional-approved-words: ''
+            additional-denied-words: ''
+
+        - name: Terraform Destroy
+          run: terraform destroy -auto-approve 
