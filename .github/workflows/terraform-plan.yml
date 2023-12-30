@@ -1,0 +1,100 @@
+name: Terraform Plan Infrastructure
+
+on:
+  workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
+
+env:
+  # Enable setting for Terraform logs
+  TF_LOG: INFO
+  # Credentials for deployment to AWS
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }} #TF_VAR_cloudflare_api_token
+  tf_working_dir: infrastructure
+
+jobs:
+    terraform-plan:
+        name: Terraform Plan Infrastructure
+        runs-on: ubuntu-latest
+        defaults:
+          run:
+            shell: bash
+            working-directory: ${{ env.tf_working_dir }}
+        steps:
+            - name: Checkout the repository
+              uses: actions/checkout@v3
+
+            - name: Setup Terraform with specified version on the runner
+              uses: hashicorp/setup-terraform@v3
+              with:
+                terraform_version: 1.5.3
+
+            # Format Terraform Syntax and code
+            - name: Terraform fmt
+              id: fmt
+              run: terraform fmt -check
+              continue-on-error: true   
+
+            # Initialize Terraform
+            - name: Terraform Init
+              id: init
+              run: terraform init
+            
+            # Validate Terraform Code
+            - name: Terraform Validate
+              id: validate
+              run: terraform validate
+
+            # Generates an execution plan for Terraform
+            # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
+            - name: Terraform Plan
+              id: plan
+              run: |
+                export exitcode=0
+                terraform plan -detailed-exitcode -no-color -out ${{ github.sha }}.tfplan  || export exitcode=$?
+                echo "exitcode=$exitcode" >> $GITHUB_OUTPUT            
+                if [ $exitcode -eq 1 ]; then
+                  echo Terraform Plan Failed!
+                  exit 1
+                else 
+                  exit 0
+                fi
+
+            # Upload Terraform Plan to Artifact  
+            - name: Upload Terraform Plan to Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: terraform-plan-${{ github.sha }}
+                path: ${{ env.tf_working_dir }}/${{ github.sha }}.tfplan
+                if-no-files-found: error
+
+            # Create the Plan Output String
+            - name: Create the Plan Output String
+              id: plan-string
+              run: |
+                TERRAFORM_PLAN=$(terraform show -no-color ${{ github.sha }}.tfplan)                    
+                delimiter="$(openssl rand -hex 8)"
+                echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+                echo "## Terraform Plan Output" >> $GITHUB_OUTPUT
+                echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+                echo "" >> $GITHUB_OUTPUT
+                echo '```terraform' >> $GITHUB_OUTPUT
+                echo "$TERRAFORM_PLAN" >> $GITHUB_OUTPUT
+                echo '```' >> $GITHUB_OUTPUT
+                echo "</details>" >> $GITHUB_OUTPUT
+                echo "${delimiter}" >> $GITHUB_OUTPUT
+              
+            # Publish Terraform Plan to task Summary
+            - name: Publish Terraform Plan to Task Summary
+              env:
+                SUMMARY: ${{ steps.plan-string.outputs.summary }}
+              run: |
+                echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+            

@@ -1,0 +1,17 @@
+name: TestInfraCode
+
+permissions: read-all
+
+on:
+  push:
+    branches:
+      - '*'
+      - '!feature/**'
+
+jobs:
+  tflint:
+    uses: ./.github/workflows/tflint-check.yml
+  tfsec:
+    uses: ./.github/workflows/tfsec-check.yml
+  checkov:
+    uses: ./.github/workflows/checkov-check.yml
