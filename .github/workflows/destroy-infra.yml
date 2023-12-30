@@ -14,6 +14,14 @@ on:
         description: "Who deploys this workflow?"
         required: true
 
+env:
+  # Enable setting for Terraform logs
+  TF_LOG: INFO
+  # Credentials for deployment to AWS
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }} #TF_VAR_cloudflare_api_token
+  tf_working_dir: infrastructure
 
 jobs:
   tflint:
@@ -28,7 +36,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: infrastructure
+        working-directory: ${{ env.tf_working_dir }}
     steps:      
         - name: Checkout the repository
           uses: actions/checkout@v3
