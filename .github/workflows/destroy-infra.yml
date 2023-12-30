@@ -28,7 +28,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{ env.tf_working_dir }}
+        working-directory: infrastructure
     steps:      
         - name: Checkout the repository
           uses: actions/checkout@v3
