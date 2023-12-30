@@ -1,0 +1,32 @@
+name: TfsecCheckTerraformCode
+
+on: [workflow_call]
+
+jobs:
+  tfsec-checks:
+    name: Tfsec Checks on Terraform Code
+    defaults:
+      run:
+        shell: bash
+
+    runs-on: ubuntu-latest
+    steps:
+    # Checkout Repository
+    - name : Check out Git Repository
+      uses: actions/checkout@v3        
+    
+    # Install tfsec cli
+    - name: tfsec Install
+      run : |
+        curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+
+    # Tfsec Scan from CLI, fails only if there is any critical config mismatch else all ignored
+    - name: tfsec scan
+      run : |
+        tfsec --minimum-severity=CRITICAL --exclude aws-ec2-no-excessive-port-access,aws-ec2-no-public-ingress-acl
+
+    # Tfsec - Security scanner for Terraform code
+    - name: tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        soft_fail: true

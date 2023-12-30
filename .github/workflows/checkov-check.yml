@@ -1,0 +1,23 @@
+name: CheckovScanTerraformCode
+
+on: [workflow_call]
+
+jobs:
+  tfsec-checks:
+    name: Checkov Scan on Terraform Code
+    defaults:
+      run:
+        shell: bash
+
+    runs-on: ubuntu-latest
+    steps:
+    # Checkout Repository
+    - name : Check out Git Repository
+      uses: actions/checkout@v3        
+    
+    # Checkov - Security scanner for Terraform code
+    - name: checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        quiet: true
+        soft_fail: true

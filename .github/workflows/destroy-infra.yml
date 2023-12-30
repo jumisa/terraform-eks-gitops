@@ -1,0 +1,36 @@
+name: Destroy Infrastructure
+
+permissions:
+    contents: write
+    pull-requests: write 
+    issues: write
+    id-token: write
+    packages: none
+    
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_init_by_name:
+        description: "Who deploys this workflow?"
+        required: true
+
+
+jobs:
+  tflint:
+    uses: ./.github/workflows/tflint-check.yml
+  tfsec:
+    uses: ./.github/workflows/tfsec-check.yml
+  checkov:
+    uses: ./.github/workflows/checkov-check.yml
+  deploy-infra:
+    uses: ./.github/workflows/terraform-destroy.yml
+    needs: 
+      - tflint
+      - tfsec
+      - checkov
+    with:
+      workflow_init_by_name: ${{ github.event.inputs.workflow_init_by_name }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }} 
